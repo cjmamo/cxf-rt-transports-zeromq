@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions name="HelloWorldService"
+             targetNamespace="http://cxf.apache.org/hello_world_zmq"
+             xmlns="http://schemas.xmlsoap.org/wsdl/"
+             xmlns:zmq="http://cxf.apache.org/transports/zmq"
+             xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+             xmlns:tns="http://cxf.apache.org/hello_world_zmq"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+    <message name="SayHelloRequest">
+        <part name="firstName" type="xsd:string"/>
+    </message>
+    <message name="SayHelloResponse">
+        <part name="greeting" type="xsd:string"/>
+    </message>
+
+    <portType name="HelloWorldPortType">
+        <operation name="sayHello">
+            <input message="tns:SayHelloRequest"/>
+            <output message="tns:SayHelloResponse"/>
+        </operation>
+    </portType>
+
+    <binding name="HelloWorldPortBinding" type="tns:HelloWorldPortType">
+        <soap:binding style="rpc" transport="http://cxf.apache.org/transports/zmq"/>
+        <operation name="sayHello">
+            <soap:operation soapAction="sayHello"/>
+            <input>
+                <soap:body namespace="http://cxf.apache.org/hello_world_zmq"/>
+            </input>
+            <output>
+                <soap:body namespace="http://cxf.apache.org/hello_world_zmq"/>
+            </output>
+        </operation>
+    </binding>
+
+    <service name="HelloWorldService">
+        <port binding="tns:HelloWorldPortBinding" name="HelloWorldPort">
+            <zmq:address location="tcp://127.0.0.1:9000"/>
+            <zmq:serviceConfig socketOperation="bind" socketType="rep"/>
+            <zmq:clientConfig socketOperation="connect" socketType="req"/>
+        </port>
+    </service>
+</definitions>

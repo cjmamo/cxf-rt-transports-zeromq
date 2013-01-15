@@ -1,0 +1,14 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+    <soapenv:Header xmlns:wsa="http://www.w3.org/2005/08/addressing">
+        <wsa:Action soapenv:mustUnderstand="1">http://cxf.apache.org/hello_world_zmq/HelloWorldPortType/sayHelloRequest</wsa:Action>
+        <wsa:ReplyTo soapenv:mustUnderstand="1">
+            <wsa:Address>zmq:(tcp://localhost:9001?socketOperation=connect&amp;socketType=push)</wsa:Address>
+        </wsa:ReplyTo>
+        <wsa:MessageID soapenv:mustUnderstand="1">uuid:6109111f-7b71-4e89-ae4f-2b188ec03d30</wsa:MessageID>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ns1:sayHello xmlns:ns1="http://cxf.apache.org/hello_world_zmq">
+            <firstName>Claude</firstName>
+        </ns1:sayHello>
+    </soapenv:Body>
+</soapenv:Envelope>

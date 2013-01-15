@@ -1,0 +1,7 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Body>
+        <ns1:sayHello xmlns:ns1="http://cxf.apache.org/hello_world_zmq">
+            <firstName>Claude</firstName>
+        </ns1:sayHello>
+    </soap:Body>
+</soap:Envelope>

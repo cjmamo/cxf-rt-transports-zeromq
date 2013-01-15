@@ -1,0 +1,16 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Header>
+        <Action xmlns="http://www.w3.org/2005/08/addressing">
+            http://cxf.apache.org/hello_world_zmq/HelloWorldImpl/sayHelloResponse
+        </Action>
+        <MessageID xmlns="http://www.w3.org/2005/08/addressing">urn:uuid:5e872da6-5229-4591-b31b-fb6b4c781423
+        </MessageID>
+        <To xmlns="http://www.w3.org/2005/08/addressing">zmq:(tcp://localhost:9001?socketOperation=connect&amp;socketType=push)</To>
+        <RelatesTo xmlns="http://www.w3.org/2005/08/addressing">uuid:6109111f-7b71-4e89-ae4f-2b188ec03d30</RelatesTo>
+    </soap:Header>
+    <soap:Body>
+        <ns2:sayHelloResponse xmlns:ns2="http://cxf.apache.org/hello_world_zmq">
+            <greeting>Hello Claude</greeting>
+        </ns2:sayHelloResponse>
+    </soap:Body>
+</soap:Envelope>

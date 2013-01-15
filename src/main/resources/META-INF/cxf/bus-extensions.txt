@@ -1,0 +1,4 @@
+org.apache.cxf.transport.zmq.ZMQTransportFactory::true
+org.apache.cxf.transport.zmq.wsdl11.ZMQWSDLExtensionLoader::true
+
+

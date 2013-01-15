@@ -1,0 +1,21 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:jaxws="http://cxf.apache.org/jaxws"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://cxf.apache.org/jaxws http://cxf.apache.org/schemas/jaxws.xsd">
+
+    <jaxws:client id="helloWorldClient"
+                  serviceClass="org.org.apache.cxf.hello_world_zmq.HelloWorldPortType"
+                  address="zmq:(tcp://localhost:9000?socketOperation=connect&amp;socketType=req)" >
+        <jaxws:features>
+            <bean xmlns="http://www.springframework.org/schema/beans"
+                  class="org.apache.cxf.transport.zmq.ZMQConfigFeature"
+                  p:zmqConfig-ref="zmqConfig"/>
+        </jaxws:features>
+    </jaxws:client>
+
+    <bean id="zmqConfig" class="org.apache.cxf.transport.zmq.ZMQConfiguration"
+          p:ioThreads="2"/>
+</beans>
