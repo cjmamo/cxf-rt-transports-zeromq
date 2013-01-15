@@ -1,0 +1,16 @@
+Runtime requirements:
+
+- Apache CXF 2.7.2
+- ZeroMQ 2.2.0 or 3.2.2
+- jzmq 2.1.0 (ZeroMQ Java language binding)
+
+
+Installation instructions:
+
+1. Install Maven and from your console enter the following command in the project's root folder:
+   "mvn package -Djzmq.path=[jzmq path]". This will produce a JAR in the "target" folder called
+   "cxf-rt-transports-zeromq-[version].jar".
+
+2. Add the ZeroMQ transport JAR to your application's classpath. You must also add jzmq's "zmq.jar" to the classpath.
+
+3. Point your application's Java VM native library path to jzmq's lib folder (e.g., -Djava.library.path=/opt/jzmq/lib).
