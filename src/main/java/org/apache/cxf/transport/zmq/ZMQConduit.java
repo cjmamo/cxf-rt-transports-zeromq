@@ -15,10 +15,12 @@
  */
 package org.apache.cxf.transport.zmq;
 
+import org.apache.cxf.Bus;
 import org.apache.cxf.common.logging.LogUtils;
 import org.apache.cxf.message.Exchange;
 import org.apache.cxf.message.Message;
 import org.apache.cxf.message.MessageImpl;
+import org.apache.cxf.service.model.EndpointInfo;
 import org.apache.cxf.transport.AbstractConduit;
 import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
 import org.apache.cxf.ws.addressing.EndpointReferenceType;
@@ -45,8 +47,8 @@ public class ZMQConduit extends AbstractConduit {
     }
 
     public ZMQConduit(EndpointReferenceType target,
-                      EndpointConfig endpointConfig) {
-        super(target);
+                      EndpointConfig endpointConfig, EndpointInfo endpointInfo, Bus bus) {
+        super(getTargetReference(endpointInfo, target, bus));
         this.endpointConfig = endpointConfig;
     }
 

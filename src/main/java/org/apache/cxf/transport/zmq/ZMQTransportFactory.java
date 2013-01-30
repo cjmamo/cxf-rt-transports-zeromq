@@ -62,7 +62,7 @@ public class ZMQTransportFactory extends AbstractTransportFactory implements Con
     public Conduit getConduit(EndpointInfo endpointInfo, EndpointReferenceType target) throws IOException {
         ConfigurationFactory configFactory = new ConfigurationFactory();
         EndpointConfig endpointConfig = configFactory.createConfiguration(bus, endpointInfo, target, true);
-        return new ZMQConduit(target, endpointConfig);
+        return new ZMQConduit(target, endpointConfig, endpointInfo, bus);
     }
 
     @Override

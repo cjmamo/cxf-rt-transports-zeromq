@@ -6,7 +6,7 @@
 
     <groupId>org.apache.cxf</groupId>
     <artifactId>cxf-rt-transports-zeromq</artifactId>
-    <version>1.0</version>
+    <version>1.1-SNAPSHOT</version>
 
     <properties>
         <cxf.version>2.7.2</cxf.version>
@@ -117,5 +117,5 @@
             <url>file://${project.basedir}/lib</url>
         </repository>
     </repositories>
-    
+
 </project>

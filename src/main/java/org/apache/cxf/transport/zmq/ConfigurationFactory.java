@@ -47,6 +47,8 @@ public class ConfigurationFactory {
                     clientConfig = endpointInfo.getTraversedExtensor(clientConfig, org.apache.cxf.transport.zmq.ClientConfig.class);
                     endpointConfig.setSocketType(Enum.valueOf(ZMQURIConstants.SocketType.class, clientConfig.getSocketType().value().toUpperCase()));
                     endpointConfig.setSocketOperation(Enum.valueOf(ZMQURIConstants.SocketOperation.class, clientConfig.getSocketOperation().value().toUpperCase()));
+                    endpointInfo.setAddress("zmq:(" + address.getLocation() + "?socketOperation=" + clientConfig.getSocketOperation()  + "&socketType=" + clientConfig.getSocketType() + ")");
+
                 } else {
                     org.apache.cxf.transport.zmq.ServiceConfig serviceConfig = null;
                     serviceConfig = endpointInfo.getTraversedExtensor(serviceConfig, org.apache.cxf.transport.zmq.ServiceConfig.class);
@@ -59,6 +61,24 @@ public class ConfigurationFactory {
             } else {
                 endpointConfig = ZMQEndpointParser.createEndpointConfig(adr);
             }
+
+            if (endpointInfo.getName().getLocalPart().endsWith(".decoupled")) {
+                if (endpointConfig.getSocketOperation().equals(ZMQURIConstants.SocketOperation.CONNECT)) {
+                    endpointConfig.setSocketOperation(ZMQURIConstants.SocketOperation.BIND);
+                }
+                else {
+                    endpointConfig.setSocketOperation(ZMQURIConstants.SocketOperation.CONNECT);
+                }
+
+                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.PUSH)) {
+                    endpointConfig.setSocketType(ZMQURIConstants.SocketType.PULL);
+                }
+                else {
+                    throw new UnsupportedOperationException();
+                }
+
+            }
+
         } catch (Exception e) {
             IOException e2 = new IOException(e.getMessage());
             e2.initCause(e);

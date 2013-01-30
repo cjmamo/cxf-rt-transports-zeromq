@@ -1,9 +1,14 @@
 package org.apache.cxf.transport.zmq;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.cxf.endpoint.Server;
+import org.apache.cxf.frontend.ClientProxy;
 import org.apache.cxf.jaxws.JaxWsProxyFactoryBean;
+import org.apache.cxf.jaxws.JaxWsServerFactoryBean;
+import org.apache.cxf.ws.addressing.WSAddressingFeature;
 import org.custommonkey.xmlunit.XMLAssert;
 import org.junit.Test;
+import org.org.apache.cxf.hello_world_zmq.HelloWorldImpl;
 import org.org.apache.cxf.hello_world_zmq.HelloWorldPortType;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.zeromq.ZMQ;
@@ -15,10 +20,37 @@ import static org.junit.Assert.assertEquals;
 public class ZMQConduitTest extends AbstractZMQTransportTest {
 
     @Test
+    public void testDecoupledEndpoint() throws Exception {
+
+        JaxWsServerFactoryBean serverFactory = new JaxWsServerFactoryBean();
+        serverFactory.setAddress("zmq:(tcp://*:" + ZMQ_TEST_PORT + "?socketOperation=bind&socketType=pull)");
+        serverFactory.setServiceClass(HelloWorldImpl.class);
+        Server server = serverFactory.create();
+
+        JaxWsProxyFactoryBean clientFactory = new JaxWsProxyFactoryBean();
+        clientFactory.setServiceClass(HelloWorldPortType.class);
+        clientFactory.setAddress("zmq:(tcp://localhost:" + ZMQ_TEST_PORT + "?socketOperation=connect&socketType=push)");
+        clientFactory.getFeatures().add(new WSAddressingFeature());
+
+        HelloWorldPortType client = (HelloWorldPortType) clientFactory.create();
+
+        ClientProxy.getClient(client).getEndpoint()
+                                     .getEndpointInfo()
+                                     .setProperty("org.apache.cxf.ws.addressing.replyto",
+                                                  "zmq:(tcp://127.0.0.1:5555?socketOperation=connect&socketType=push)");
+
+        String reply = client.sayHello("Claude");
+
+        server.stop();
+
+        assertEquals("Hello Claude", reply);
+    }
+
+    @Test
     public void testConfigurationFromSpring() throws Exception {
 
-        ClassPathXmlApplicationContext ctx = new ClassPathXmlApplicationContext(new String[] {"/spring/zmq-test-client-config.xml"});
-        HelloWorldPortType client = (HelloWorldPortType)ctx.getBean("helloWorldClient");
+        ClassPathXmlApplicationContext ctx = new ClassPathXmlApplicationContext(new String[]{"/spring/zmq-test-client-config.xml"});
+        HelloWorldPortType client = (HelloWorldPortType) ctx.getBean("helloWorldClient");
 
         new Thread(new Runnable() {
             @Override
