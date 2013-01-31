@@ -118,6 +118,7 @@ public class ZMQConduit extends AbstractConduit {
 
     @Override
     public synchronized void close() {
+        zmqSocket.close();
         zmqContext.term();
         LOG.log(Level.FINE, "ZMQConduit closed ");
     }
