@@ -20,6 +20,7 @@ public final class ZMQURIConstants {
     public static final String SOCKETOPERATION_PARAMETER_NAME = "socketOperation";
     public static final String SOCKETTYPE_PARAMETER_NAME = "socketType";
     public static final String FILTER_PARAMETER_NAME = "filter";
+    public static final int ERR_EFSM = 156384763;
 
     public static enum SocketType {
         REQ, REP, PUB, XPUB, SUB, XSUB, PUSH, PULL, DEALER, ROUTER, PAIR

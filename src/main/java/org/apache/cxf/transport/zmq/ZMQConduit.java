@@ -45,6 +45,7 @@ import org.apache.cxf.transport.AbstractConduit;
 import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
 import org.apache.cxf.ws.addressing.EndpointReferenceType;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMQException;
 
 import java.io.*;
 import java.util.logging.Level;
@@ -108,7 +109,21 @@ public class ZMQConduit extends AbstractConduit {
         }
 
         synchronized (exchange) {
-            ZMQUtils.sendMessage(zmqSocket, request);
+            try {
+                ZMQUtils.sendMessage(zmqSocket, request);
+            }
+            catch (ZMQException e) {
+                if (e.getErrorCode() == ZMQURIConstants.ERR_EFSM) {
+                    LOG.log(Level.WARNING, "The operation can not be executed because the socket is not in correct state. Creating new socket and retrying operation...");
+                    zmqSocket.close();
+                    zmqSocket = ZMQResourceFactory.createSocket(endpointConfig, zmqContext);
+                    ZMQUtils.sendMessage(zmqSocket, request);
+                }
+                else {
+                    throw e;
+                }
+
+            }
 
             byte[] reply;
 
