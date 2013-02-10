@@ -1,3 +1,22 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*
  * Copyright 2012 Claude Mamo
  *
@@ -20,6 +39,7 @@ import org.apache.cxf.common.logging.LogUtils;
 import org.apache.cxf.message.Exchange;
 import org.apache.cxf.message.Message;
 import org.apache.cxf.message.MessageImpl;
+import org.apache.cxf.message.MessageUtils;
 import org.apache.cxf.service.model.EndpointInfo;
 import org.apache.cxf.transport.AbstractConduit;
 import org.apache.cxf.transport.AbstractMultiplexDestination;
@@ -136,6 +156,38 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
         });
     }
 
+    /**
+     * Determines if the current message has no response content.
+     * The message has no response content if either:
+     * - the request is oneway and the current message is no partial
+     * response or an empty partial response.
+     * - the request is not oneway but the current message is an empty partial
+     * response.
+     *
+     * @param message
+     * @return
+     */
+    private boolean hasNoResponseContent(Message message) {
+        final boolean ow = isOneWay(message);
+        final boolean pr = MessageUtils.isPartialResponse(message);
+        final boolean epr = MessageUtils.isEmptyPartialResponse(message);
+
+        //REVISIT may need to provide an option to choose other behavior?
+        // old behavior not suppressing any responses  => ow && !pr
+        // suppress empty responses for oneway calls   => ow && (!pr || epr)
+        // suppress additionally empty responses for decoupled twoway calls =>
+        return (ow && (!pr || epr)) || (!ow && epr);
+    }
+
+    /**
+     * @param message the message under consideration
+     * @return true iff the message has been marked as oneway
+     */
+    protected final boolean isOneWay(Message message) {
+        Exchange ex = message.getExchange();
+        return ex == null ? false : ex.isOneWay();
+    }
+
     protected class BackChannelConduit extends AbstractConduit {
 
         protected Message inMessage;
@@ -157,7 +209,6 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
             Exchange exchange = inMessage.getExchange();
             exchange.setOutMessage(message);
 
-
             message.setContent(OutputStream.class, new ByteArrayOutputStream() {
 
                 @Override
@@ -165,7 +216,12 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
                     super.close();
                     if (endpointConfig.getSocketType() == ZMQURIConstants.SocketType.REP) {
                         getLogger().log(Level.FINE, "send out the message!");
-                        ZMQUtils.sendMessage(zmqSocket, toByteArray());
+                        if (hasNoResponseContent(message)) {
+                            ZMQUtils.sendMessage(zmqSocket, new byte[]{0});
+                        }
+                        else {
+                            ZMQUtils.sendMessage(zmqSocket, toByteArray());
+                        }
                     }
                 }
             });

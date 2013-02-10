@@ -1,3 +1,22 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*
  * Copyright 2012 Claude Mamo
  *
@@ -20,6 +39,7 @@ import org.apache.cxf.common.logging.LogUtils;
 import org.apache.cxf.message.Exchange;
 import org.apache.cxf.message.Message;
 import org.apache.cxf.message.MessageImpl;
+import org.apache.cxf.message.MessageUtils;
 import org.apache.cxf.service.model.EndpointInfo;
 import org.apache.cxf.transport.AbstractConduit;
 import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
@@ -82,32 +102,56 @@ public class ZMQConduit extends AbstractConduit {
         final Message outMessage = exchange.getOutMessage() == null
                 ? exchange.getOutFaultMessage()
                 : exchange.getOutMessage();
+
         if (outMessage == null) {
             throw new RuntimeException("Exchange to be sent has no outMessage");
         }
 
-        if (!exchange.isOneWay() && endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) {
+        synchronized (exchange) {
+            ZMQUtils.sendMessage(zmqSocket, request);
 
-            synchronized (exchange) {
-                ZMQUtils.sendMessage(zmqSocket, request);
-                byte[] reply = ZMQUtils.receiveMessage(zmqSocket);
-                Message inMessage = new MessageImpl();
-                exchange.setInMessage(inMessage);
-                inMessage.setContent(InputStream.class, new ByteArrayInputStream(reply));
-                if (exchange.isSynchronous()) {
-                    exchange.notifyAll();
+            byte[] reply;
+
+            if (isOneway(exchange) || !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ))) {
+
+                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) {
+                    reply = ZMQUtils.receiveMessage(zmqSocket);
+                    if ((reply.length == 1 && reply[0] == 0) || !doProcessResponse(outMessage)) {
+                        return;
+                    }
+                } else {
+                    return;
                 }
 
+            } else {
+                reply = ZMQUtils.receiveMessage(zmqSocket);
             }
 
-            if (incomingObserver != null) {
-                incomingObserver.onMessage(exchange.getInMessage());
+            Message inMessage = new MessageImpl();
+            exchange.setInMessage(inMessage);
+            inMessage.setContent(InputStream.class, new ByteArrayInputStream(reply));
+            if (exchange.isSynchronous()) {
+                exchange.notifyAll();
             }
-
-        } else {
-            ZMQUtils.sendMessage(zmqSocket, request);
         }
 
+        if (incomingObserver != null) {
+            incomingObserver.onMessage(exchange.getInMessage());
+        }
+
+    }
+
+    private boolean isOneway(Exchange exchange) {
+        return exchange != null && exchange.isOneWay();
+    }
+
+    private boolean doProcessResponse(Message message) {
+        // 1. Not oneWay
+        if (!isOneway(message.getExchange())) {
+            return true;
+        }
+        // 2. Context property
+        return MessageUtils.getContextualBoolean(message, Message.PROCESS_ONEWAY_RESPONSE, false);
     }
 
     @Override

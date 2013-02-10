@@ -67,7 +67,7 @@
             <groupId>org.zeromq</groupId>
             <artifactId>zmq</artifactId>
             <version>2.1.0</version>
-            <scope>provided</scope>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.cxf</groupId>
