@@ -15,10 +15,17 @@
  */
 package org.apache.cxf.transport.zmq;
 
+import org.apache.cxf.common.logging.LogUtils;
+import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
 import org.zeromq.ZMQ;
 import org.zeromq.ZMQException;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class ZMQUtils {
+
+    private static final Logger LOG = LogUtils.getL7dLogger(ZMQUtils.class);
 
     public static void sendMessage(ZMQ.Socket zmqSocket, byte[] message) {
         zmqSocket.send(message, 0);
@@ -28,8 +35,14 @@ public class ZMQUtils {
         try {
             return zmqSocket.recv(0);
         } catch (ZMQException e) {
-            zmqSocket.close();
-            return null;
+            if(e.getErrorCode() == ZMQURIConstants.ERR_ETERM) {
+                LOG.log(Level.FINE, "ZeroMQ context terminated. Closing socket...");
+                zmqSocket.close();
+                return null;
+            }
+            else {
+                throw e;
+            }
         }
     }
 }
