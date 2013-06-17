@@ -12,6 +12,7 @@ import org.org.apache.cxf.hello_world_zmq.HelloWorldImpl;
 import org.org.apache.cxf.hello_world_zmq.HelloWorldPortType;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
 
 import java.io.File;
 
@@ -53,7 +54,7 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
         HelloWorldPortType client = (HelloWorldPortType) ctx.getBean("helloWorldClient");
 
         new Thread(new Runnable() {
-            @Override
+        	@Override
             public void run() {
                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
@@ -76,7 +77,7 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
     public void testConfigurationFromAPI() throws Exception {
 
         new Thread(new Runnable() {
-            @Override
+        	@Override
             public void run() {
                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
@@ -100,12 +101,49 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
         String reply = client.sayHello("Claude");
         assertEquals("Hello Claude", reply);
     }
+    
+    @Test
+    public void testConfigurationFromAPIRouterDealer() throws Exception {
+
+        new Thread(new Runnable() {
+            public void run() {
+                ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.ROUTER);
+                zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
+                //byte[] request = zmqSocket.recv(0);
+                ZMsg msg = ZMsg.recvMsg(zmqSocket);
+                byte [] address = msg.pop().getData();
+                
+                try {
+                    
+                	XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-request.xml").toURI())), new String(msg.getLast().getData()));
+                    
+                    ZMsg outGoingMessage = new ZMsg();
+                    outGoingMessage.add(address);//copy address/identity
+                    outGoingMessage.add(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())));
+                    outGoingMessage.send(zmqSocket);
+                    
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                zmqSocket.close();
+            }
+        }).start();
+
+        String address = "zmq:(tcp://localhost:" + ZMQ_TEST_PORT + "?socketOperation=connect&socketType=dealer)";
+
+        JaxWsProxyFactoryBean factory = new JaxWsProxyFactoryBean();
+        factory.setServiceClass(HelloWorldPortType.class);
+        factory.setAddress(address);
+        HelloWorldPortType client = (HelloWorldPortType) factory.create();
+        String reply = client.sayHello("Claude");
+        assertEquals("Hello Claude", reply);
+    }
 
     @Test
     public void testConfigurationFromWSDL() throws Exception {
 
         new Thread(new Runnable() {
-            @Override
+        	@Override
             public void run() {
                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
