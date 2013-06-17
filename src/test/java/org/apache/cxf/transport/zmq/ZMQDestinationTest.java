@@ -69,6 +69,25 @@ public class ZMQDestinationTest extends AbstractZMQTransportTest {
 
         XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())), new String(reply));
     }
+    
+    @Test
+    public void testConfigurationFromAPIRouterDealer() throws Exception {
+
+        JaxWsServerFactoryBean bean = new JaxWsServerFactoryBean();
+        bean.setAddress("zmq:(tcp://*:" + ZMQ_TEST_PORT + "?socketOperation=bind&socketType=router)");
+        bean.setServiceClass(HelloWorldImpl.class);
+        Server server = bean.create();
+
+        ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.DEALER);
+        zmqSocket.connect("tcp://localhost:" + ZMQ_TEST_PORT);
+        zmqSocket.send(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-request.xml").toURI())).getBytes(), 0);
+        byte[] reply = zmqSocket.recv(0);
+        zmqSocket.close();
+
+        server.stop();
+
+        XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())), new String(reply));
+    }
 
     @Test
     public void testReplyTo() throws Exception {

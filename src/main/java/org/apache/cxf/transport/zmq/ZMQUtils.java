@@ -18,6 +18,8 @@ package org.apache.cxf.transport.zmq;
 import org.apache.cxf.common.logging.LogUtils;
 import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
+import org.zeromq.ZMQ.Socket;
 import org.zeromq.ZMQException;
 
 import java.util.logging.Level;
@@ -45,4 +47,31 @@ public class ZMQUtils {
             }
         }
     }
+
+	public static ZMsg receiveZMessage(ZMQ.Socket zmqSocket) {
+		ZMsg msg = null;
+		try {
+			msg = ZMsg.recvMsg(zmqSocket);
+		} catch (ZMQException e) {
+			if (e.getErrorCode() == ZMQURIConstants.ERR_ETERM) {
+				LOG.log(Level.FINE,
+						"ZeroMQ context terminated. Closing socket...");
+				zmqSocket.close();
+				return null;
+			} else {
+				throw e;
+			}
+		}
+
+		return msg;
+	}
+            
+	public static void sendMessage(Socket zmqSocket, byte[] identifier,
+			byte[] byteArray) {
+           	ZMsg outGoingMessage = new ZMsg();
+      		outGoingMessage.add(identifier);
+      		outGoingMessage.add(byteArray);
+
+      		outGoingMessage.send(zmqSocket);
+	}
 }

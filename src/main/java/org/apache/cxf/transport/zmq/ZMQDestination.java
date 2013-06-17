@@ -49,6 +49,7 @@ import org.apache.cxf.workqueue.WorkQueueManager;
 import org.apache.cxf.ws.addressing.EndpointReferenceType;
 import org.apache.cxf.wsdl.EndpointReferenceUtils;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
 
 import java.io.*;
 import java.util.concurrent.Executor;
@@ -106,17 +107,36 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
     protected Logger getLogger() {
         return LOG;
     }
-
+    
+    @Override
+    public void onMessage(ZMsg message, ZMQ.Socket zmqSocket)
+    {
+        getLogger().log(Level.FINE, "server received request: ", message);
+       
+        Message inMessage = new MessageImpl();
+        if(zmqSocket.getType() == ZMQ.ROUTER)
+        {
+        	inMessage.put("identifier", message.pop().getData());
+        }
+        inMessage.setContent(InputStream.class, new ByteArrayInputStream(message.getLast().getData()));
+        ((MessageImpl) inMessage).setDestination(this);
+        inMessage.put("socket", zmqSocket);
+        
+        incomingObserver.onMessage(inMessage);
+	
+    }
+    //Not in use after dealer router support
     @Override
     public void onMessage(byte[] message, ZMQ.Socket zmqSocket) {
         getLogger().log(Level.FINE, "server received request: ", message);
-
+        
         Message inMessage = new MessageImpl();
         inMessage.setContent(InputStream.class, new ByteArrayInputStream(message));
         ((MessageImpl) inMessage).setDestination(this);
         inMessage.put("socket", zmqSocket);
-
+        
         incomingObserver.onMessage(inMessage);
+        
     }
 
     private void registerZMQListener(EndpointConfig endpointConfig,
@@ -130,14 +150,15 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
         final ZMQ.Poller poller = ZMQResourceFactory.createPoller(zmqSocket, zmqContext);
 
         executor.execute(new Runnable() {
-            @Override
+           // @Override
             public void run() {
                 boolean isContextTerm = false;
 
                 while (!isContextTerm) {
                     poller.poll();
 
-                    final byte[] message = ZMQUtils.receiveMessage(zmqSocket);
+                    //final byte[] message = ZMQUtils.receiveMessage(zmqSocket);
+                    final ZMsg message = ZMQUtils.receiveZMessage(zmqSocket);
                     if (message != null) {
                         if (zmqSocket.getType() == ZMQ.REP) {
                             messageListener.onMessage(message, zmqSocket);
@@ -221,6 +242,17 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
                         }
                         else {
                             ZMQUtils.sendMessage(zmqSocket, toByteArray());
+                        }
+                    }
+                    else if(endpointConfig.getSocketType() == ZMQURIConstants.SocketType.ROUTER)
+                    {
+                    	final byte[] identifier = (byte[]) inMessage.get("identifier");
+                    	if (hasNoResponseContent(message)) {
+                    		 
+                             ZMQUtils.sendMessage(zmqSocket, identifier, new byte[]{0});
+                        }
+                        else {
+                             ZMQUtils.sendMessage(zmqSocket, identifier, toByteArray());
                         }
                     }
                 }

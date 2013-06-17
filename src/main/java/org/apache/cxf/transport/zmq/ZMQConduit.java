@@ -127,15 +127,17 @@ public class ZMQConduit extends AbstractConduit {
 
             byte[] reply;
 
-            if (isOneway(exchange) || !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ))) {
+            if (isOneway(exchange) || !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) 
+            		|| !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.DEALER))) {
 
-                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) {
+                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ) 
+                		|| endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.DEALER)) {
                     reply = ZMQUtils.receiveMessage(zmqSocket);
                     if ((reply.length == 1 && reply[0] == 0) || !doProcessResponse(outMessage)) {
                         return;
                     }
                 } else {
-                    return;
+                	return;
                 }
 
             } else {

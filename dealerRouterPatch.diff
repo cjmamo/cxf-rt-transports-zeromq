@@ -1,0 +1,313 @@
+diff --git a/pom.xml b/pom.xml
+index fe18162..255945f 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -6,7 +6,7 @@
+ 
+     <groupId>org.apache.cxf</groupId>
+     <artifactId>cxf-rt-transports-zeromq</artifactId>
+-    <version>1.1-SNAPSHOT</version>
++    <version>1.2-SNAPSHOT</version>
+ 
+     <properties>
+         <cxf.version>2.7.2</cxf.version>
+@@ -66,7 +66,7 @@
+         <dependency>
+             <groupId>org.zeromq</groupId>
+             <artifactId>zmq</artifactId>
+-            <version>2.1.0</version>
++            <version>3.2.2</version>
+             <scope>compile</scope>
+         </dependency>
+         <dependency>
+@@ -118,4 +118,4 @@
+         </repository>
+     </repositories>
+ 
+-</project>
+\ No newline at end of file
++</project>
+diff --git a/src/main/java/org/apache/cxf/transport/zmq/MessageListener.java b/src/main/java/org/apache/cxf/transport/zmq/MessageListener.java
+index ccda4c4..878be0b 100644
+--- a/src/main/java/org/apache/cxf/transport/zmq/MessageListener.java
++++ b/src/main/java/org/apache/cxf/transport/zmq/MessageListener.java
+@@ -16,7 +16,9 @@
+ package org.apache.cxf.transport.zmq;
+ 
+ import org.zeromq.ZMQ;
++import org.zeromq.ZMsg;
+ 
+ public interface MessageListener {
+-    void onMessage(byte[] message, ZMQ.Socket zmqSocket);
++    void onMessage(byte[] message, ZMQ.Socket zmqSocket);//Not in use now after Dealer router support
++    void onMessage(ZMsg message, ZMQ.Socket zmqSocket);
+ }
+diff --git a/src/main/java/org/apache/cxf/transport/zmq/ZMQConduit.java b/src/main/java/org/apache/cxf/transport/zmq/ZMQConduit.java
+index ba3f727..1565c6a 100644
+--- a/src/main/java/org/apache/cxf/transport/zmq/ZMQConduit.java
++++ b/src/main/java/org/apache/cxf/transport/zmq/ZMQConduit.java
+@@ -127,15 +127,17 @@ public class ZMQConduit extends AbstractConduit {
+ 
+             byte[] reply;
+ 
+-            if (isOneway(exchange) || !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ))) {
++            if (isOneway(exchange) || !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) 
++            		|| !(endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.DEALER))) {
+ 
+-                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ)) {
++                if (endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.REQ) 
++                		|| endpointConfig.getSocketType().equals(ZMQURIConstants.SocketType.DEALER)) {
+                     reply = ZMQUtils.receiveMessage(zmqSocket);
+                     if ((reply.length == 1 && reply[0] == 0) || !doProcessResponse(outMessage)) {
+                         return;
+                     }
+                 } else {
+-                    return;
++                	return;
+                 }
+ 
+             } else {
+diff --git a/src/main/java/org/apache/cxf/transport/zmq/ZMQDestination.java b/src/main/java/org/apache/cxf/transport/zmq/ZMQDestination.java
+index b3ccbb7..f9a726c 100644
+--- a/src/main/java/org/apache/cxf/transport/zmq/ZMQDestination.java
++++ b/src/main/java/org/apache/cxf/transport/zmq/ZMQDestination.java
+@@ -49,6 +49,7 @@ import org.apache.cxf.workqueue.WorkQueueManager;
+ import org.apache.cxf.ws.addressing.EndpointReferenceType;
+ import org.apache.cxf.wsdl.EndpointReferenceUtils;
+ import org.zeromq.ZMQ;
++import org.zeromq.ZMsg;
+ 
+ import java.io.*;
+ import java.util.concurrent.Executor;
+@@ -106,17 +107,36 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
+     protected Logger getLogger() {
+         return LOG;
+     }
+-
++    
++    @Override
++    public void onMessage(ZMsg message, ZMQ.Socket zmqSocket)
++    {
++        getLogger().log(Level.FINE, "server received request: ", message);
++       
++        Message inMessage = new MessageImpl();
++        if(zmqSocket.getType() == ZMQ.ROUTER)
++        {
++        	inMessage.put("identifier", message.pop().getData());
++        }
++        inMessage.setContent(InputStream.class, new ByteArrayInputStream(message.getLast().getData()));
++        ((MessageImpl) inMessage).setDestination(this);
++        inMessage.put("socket", zmqSocket);
++        
++        incomingObserver.onMessage(inMessage);
++	
++    }
++    //Not in use after dealer router support
+     @Override
+     public void onMessage(byte[] message, ZMQ.Socket zmqSocket) {
+         getLogger().log(Level.FINE, "server received request: ", message);
+-
++        
+         Message inMessage = new MessageImpl();
+         inMessage.setContent(InputStream.class, new ByteArrayInputStream(message));
+         ((MessageImpl) inMessage).setDestination(this);
+         inMessage.put("socket", zmqSocket);
+-
++        
+         incomingObserver.onMessage(inMessage);
++        
+     }
+ 
+     private void registerZMQListener(EndpointConfig endpointConfig,
+@@ -130,14 +150,15 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
+         final ZMQ.Poller poller = ZMQResourceFactory.createPoller(zmqSocket, zmqContext);
+ 
+         executor.execute(new Runnable() {
+-            @Override
++           // @Override
+             public void run() {
+                 boolean isContextTerm = false;
+ 
+                 while (!isContextTerm) {
+                     poller.poll();
+ 
+-                    final byte[] message = ZMQUtils.receiveMessage(zmqSocket);
++                    //final byte[] message = ZMQUtils.receiveMessage(zmqSocket);
++                    final ZMsg message = ZMQUtils.receiveZMessage(zmqSocket);
+                     if (message != null) {
+                         if (zmqSocket.getType() == ZMQ.REP) {
+                             messageListener.onMessage(message, zmqSocket);
+@@ -223,6 +244,17 @@ public class ZMQDestination extends AbstractMultiplexDestination implements Mess
+                             ZMQUtils.sendMessage(zmqSocket, toByteArray());
+                         }
+                     }
++                    else if(endpointConfig.getSocketType() == ZMQURIConstants.SocketType.ROUTER)
++                    {
++                    	final byte[] identifier = (byte[]) inMessage.get("identifier");
++                    	if (hasNoResponseContent(message)) {
++                    		 
++                             ZMQUtils.sendMessage(zmqSocket, identifier, new byte[]{0});
++                        }
++                        else {
++                             ZMQUtils.sendMessage(zmqSocket, identifier, toByteArray());
++                        }
++                    }
+                 }
+             });
+         }
+diff --git a/src/main/java/org/apache/cxf/transport/zmq/ZMQUtils.java b/src/main/java/org/apache/cxf/transport/zmq/ZMQUtils.java
+index 87bdf2a..bfd92c4 100644
+--- a/src/main/java/org/apache/cxf/transport/zmq/ZMQUtils.java
++++ b/src/main/java/org/apache/cxf/transport/zmq/ZMQUtils.java
+@@ -18,6 +18,8 @@ package org.apache.cxf.transport.zmq;
+ import org.apache.cxf.common.logging.LogUtils;
+ import org.apache.cxf.transport.zmq.uri.ZMQURIConstants;
+ import org.zeromq.ZMQ;
++import org.zeromq.ZMsg;
++import org.zeromq.ZMQ.Socket;
+ import org.zeromq.ZMQException;
+ 
+ import java.util.logging.Level;
+@@ -45,4 +47,31 @@ public class ZMQUtils {
+             }
+         }
+     }
++
++	public static ZMsg receiveZMessage(ZMQ.Socket zmqSocket) {
++		ZMsg msg = null;
++		try {
++			msg = ZMsg.recvMsg(zmqSocket);
++		} catch (ZMQException e) {
++			if (e.getErrorCode() == ZMQURIConstants.ERR_ETERM) {
++				LOG.log(Level.FINE,
++						"ZeroMQ context terminated. Closing socket...");
++				zmqSocket.close();
++				return null;
++			} else {
++				throw e;
++			}
++		}
++
++		return msg;
++	}
++            
++	public static void sendMessage(Socket zmqSocket, byte[] identifier,
++			byte[] byteArray) {
++           	ZMsg outGoingMessage = new ZMsg();
++      		outGoingMessage.add(identifier);
++      		outGoingMessage.add(byteArray);
++
++      		outGoingMessage.send(zmqSocket);
++	}
+ }
+diff --git a/src/test/java/org/apache/cxf/transport/zmq/ZMQConduitTest.java b/src/test/java/org/apache/cxf/transport/zmq/ZMQConduitTest.java
+index 50e5a21..b31619d 100644
+--- a/src/test/java/org/apache/cxf/transport/zmq/ZMQConduitTest.java
++++ b/src/test/java/org/apache/cxf/transport/zmq/ZMQConduitTest.java
+@@ -12,6 +12,7 @@ import org.org.apache.cxf.hello_world_zmq.HelloWorldImpl;
+ import org.org.apache.cxf.hello_world_zmq.HelloWorldPortType;
+ import org.springframework.context.support.ClassPathXmlApplicationContext;
+ import org.zeromq.ZMQ;
++import org.zeromq.ZMsg;
+ 
+ import java.io.File;
+ 
+@@ -53,7 +54,7 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
+         HelloWorldPortType client = (HelloWorldPortType) ctx.getBean("helloWorldClient");
+ 
+         new Thread(new Runnable() {
+-            @Override
++        	@Override
+             public void run() {
+                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
+                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
+@@ -76,7 +77,7 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
+     public void testConfigurationFromAPI() throws Exception {
+ 
+         new Thread(new Runnable() {
+-            @Override
++        	@Override
+             public void run() {
+                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
+                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
+@@ -100,12 +101,49 @@ public class ZMQConduitTest extends AbstractZMQTransportTest {
+         String reply = client.sayHello("Claude");
+         assertEquals("Hello Claude", reply);
+     }
++    
++    @Test
++    public void testConfigurationFromAPIRouterDealer() throws Exception {
++
++        new Thread(new Runnable() {
++            public void run() {
++                ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.ROUTER);
++                zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
++                //byte[] request = zmqSocket.recv(0);
++                ZMsg msg = ZMsg.recvMsg(zmqSocket);
++                byte [] address = msg.pop().getData();
++                
++                try {
++                    
++                	XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-request.xml").toURI())), new String(msg.getLast().getData()));
++                    
++                    ZMsg outGoingMessage = new ZMsg();
++                    outGoingMessage.add(address);//copy address/identity
++                    outGoingMessage.add(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())));
++                    outGoingMessage.send(zmqSocket);
++                    
++                } catch (Exception e) {
++                    throw new RuntimeException(e);
++                }
++                zmqSocket.close();
++            }
++        }).start();
++
++        String address = "zmq:(tcp://localhost:" + ZMQ_TEST_PORT + "?socketOperation=connect&socketType=dealer)";
++
++        JaxWsProxyFactoryBean factory = new JaxWsProxyFactoryBean();
++        factory.setServiceClass(HelloWorldPortType.class);
++        factory.setAddress(address);
++        HelloWorldPortType client = (HelloWorldPortType) factory.create();
++        String reply = client.sayHello("Claude");
++        assertEquals("Hello Claude", reply);
++    }
+ 
+     @Test
+     public void testConfigurationFromWSDL() throws Exception {
+ 
+         new Thread(new Runnable() {
+-            @Override
++        	@Override
+             public void run() {
+                 ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.REP);
+                 zmqSocket.bind("tcp://*:" + ZMQ_TEST_PORT);
+diff --git a/src/test/java/org/apache/cxf/transport/zmq/ZMQDestinationTest.java b/src/test/java/org/apache/cxf/transport/zmq/ZMQDestinationTest.java
+index 6b4f296..ca020e4 100644
+--- a/src/test/java/org/apache/cxf/transport/zmq/ZMQDestinationTest.java
++++ b/src/test/java/org/apache/cxf/transport/zmq/ZMQDestinationTest.java
+@@ -69,6 +69,25 @@ public class ZMQDestinationTest extends AbstractZMQTransportTest {
+ 
+         XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())), new String(reply));
+     }
++    
++    @Test
++    public void testConfigurationFromAPIRouterDealer() throws Exception {
++
++        JaxWsServerFactoryBean bean = new JaxWsServerFactoryBean();
++        bean.setAddress("zmq:(tcp://*:" + ZMQ_TEST_PORT + "?socketOperation=bind&socketType=router)");
++        bean.setServiceClass(HelloWorldImpl.class);
++        Server server = bean.create();
++
++        ZMQ.Socket zmqSocket = zmqContext.socket(ZMQ.DEALER);
++        zmqSocket.connect("tcp://localhost:" + ZMQ_TEST_PORT);
++        zmqSocket.send(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-request.xml").toURI())).getBytes(), 0);
++        byte[] reply = zmqSocket.recv(0);
++        zmqSocket.close();
++
++        server.stop();
++
++        XMLAssert.assertXMLEqual(FileUtils.readFileToString(new File(getClass().getResource("/samples/soap-reply.xml").toURI())), new String(reply));
++    }
+ 
+     @Test
+     public void testReplyTo() throws Exception {

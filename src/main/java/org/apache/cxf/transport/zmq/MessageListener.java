@@ -16,7 +16,9 @@
 package org.apache.cxf.transport.zmq;
 
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
 
 public interface MessageListener {
-    void onMessage(byte[] message, ZMQ.Socket zmqSocket);
+    void onMessage(byte[] message, ZMQ.Socket zmqSocket);//Not in use now after Dealer router support
+    void onMessage(ZMsg message, ZMQ.Socket zmqSocket);
 }
